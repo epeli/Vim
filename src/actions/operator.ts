@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { Position, PositionDiff } from './../common/motion/position';
 import { Range } from './../common/motion/range';
 import { configuration } from './../configuration/configuration';
-import { Decoration } from '../configuration/decoration';
 import { ModeName } from './../mode/mode';
 import { Register, RegisterMode } from './../register/register';
 import { VimState } from './../state/vimState';
@@ -12,6 +11,7 @@ import { BaseAction, RegisterAction } from './base';
 import { CommandNumber } from './commands/actions';
 import { TextObjectMovement } from './textobject';
 import { ReportLinesChanged, ReportLinesYanked } from '../util/statusBarTextUtils';
+import { IHighlightedYankConfiguration } from '../configuration/iconfiguration';
 
 export class BaseOperator extends BaseAction {
   constructor(multicursorIndex?: number) {
@@ -101,6 +101,19 @@ export class BaseOperator extends BaseAction {
       position.getLineBegin(),
       position.getDownByCount(Math.max(0, count - 1)).getLineEnd()
     );
+  }
+
+  public highlightYankedRange(vimState: VimState, ranges: vscode.Range[]) {
+    if (!configuration.highlightedyank.enable) {
+      return;
+    }
+
+    const yankDecoration = vscode.window.createTextEditorDecorationType({
+      backgroundColor: configuration.highlightedyank.color,
+    });
+
+    vimState.editor.setDecorations(yankDecoration, ranges);
+    setTimeout(() => yankDecoration.dispose(), configuration.highlightedyank.duration);
   }
 }
 
@@ -262,11 +275,11 @@ export class YankOperator extends BaseOperator {
     if (end.isEarlierThan(start)) {
       [start, end] = [end, start];
     }
-    end = new Position(end.line, end.character + 1);
+    let extendedEnd = new Position(end.line, end.character + 1);
 
     if (vimState.currentRegisterMode === RegisterMode.LineWise) {
       start = start.getLineBegin();
-      end = end.getLineEnd();
+      extendedEnd = extendedEnd.getLineEnd();
     }
 
     const range = new vscode.Range(start, end);
@@ -275,18 +288,19 @@ export class YankOperator extends BaseOperator {
     // If we selected the newline character, add it as well.
     if (
       vimState.currentMode === ModeName.Visual &&
-      end.character === TextEditor.getLineAt(end).text.length + 1
+      extendedEnd.character === TextEditor.getLineAt(extendedEnd).text.length + 1
     ) {
       text = text + '\n';
     }
 
-    if (configuration.highlightedyank.enable) {
-      const decoration = Decoration.YankHighlight;
-      vimState.editor.setDecorations(decoration, [range]);
-      setTimeout(() => decoration.dispose(), configuration.highlightedyank.duration);
-    }
+    this.highlightYankedRange(vimState, [range]);
 
     Register.put(text, vimState, this.multicursorIndex);
+
+    if (vimState.currentMode === ModeName.Visual || vimState.currentMode === ModeName.VisualLine) {
+      vimState.historyTracker.addMark(start, '<');
+      vimState.historyTracker.addMark(end, '>');
+    }
 
     await vimState.setCurrentMode(ModeName.Normal);
     vimState.cursorStartPosition = start;
@@ -668,13 +682,12 @@ export class YankVisualBlockMode extends BaseOperator {
 
     vimState.currentRegisterMode = RegisterMode.BlockWise;
 
-    if (configuration.highlightedyank.enable) {
-      const decoration = Decoration.YankHighlight;
-      vimState.editor.setDecorations(decoration, ranges);
-      setTimeout(() => decoration.dispose(), configuration.highlightedyank.duration);
-    }
+    this.highlightYankedRange(vimState, ranges);
 
     Register.put(toCopy, vimState, this.multicursorIndex);
+
+    vimState.historyTracker.addMark(startPos, '<');
+    vimState.historyTracker.addMark(endPos, '>');
 
     const numLinesYanked = toCopy.split('\n').length;
     ReportLinesYanked(numLinesYanked, vimState);

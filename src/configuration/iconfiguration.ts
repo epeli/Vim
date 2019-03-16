@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 
+export type Digraph = [string, number | number[]];
+
 export interface IModeSpecificStrings<T> {
   normal: T | undefined;
   insert: T | undefined;
@@ -57,6 +59,13 @@ export interface IHighlightedYankConfiguration {
   duration: number;
 }
 
+export interface ICamelCaseMotionConfiguration {
+  /**
+   * Enable CamelCaseMotion plugin or not
+   */
+  enable: boolean;
+}
+
 export interface IConfiguration {
   /**
    * Use the system's clipboard when copying.
@@ -98,6 +107,11 @@ export interface IConfiguration {
    * Indent automatically?
    */
   autoindent: boolean;
+
+  /**
+   * CamelCaseMotion plugin options
+   */
+  camelCaseMotion: ICamelCaseMotionConfiguration;
 
   /**
    * Use EasyMotion plugin?
@@ -295,4 +309,10 @@ export interface IConfiguration {
    * Threshold to report changed lines to status bar
    */
   report: number;
+
+  /**
+   * User-defined digraphs
+   */
+  digraphs: { [shortcut: string]: Digraph };
+
 }
