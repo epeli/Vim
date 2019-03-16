@@ -665,13 +665,13 @@ export class YankVisualBlockMode extends BaseOperator {
     return false;
   }
 
-  public async run(vimState: VimState, startPos: Position, endPos: Position): Promise<VimState> {
+  public async run(vimState: VimState, start: Position, end: Position): Promise<VimState> {
     let toCopy: string = '';
     const ranges: vscode.Range[] = [];
 
-    const isMultiline = startPos.line !== endPos.line;
+    const isMultiline = start.line !== end.line;
 
-    for (const { line, start, end } of Position.IterateLine(vimState)) {
+    for (const { line } of Position.IterateLine(vimState)) {
       ranges.push(new vscode.Range(start, end));
       if (isMultiline) {
         toCopy += line + '\n';
@@ -686,14 +686,14 @@ export class YankVisualBlockMode extends BaseOperator {
 
     Register.put(toCopy, vimState, this.multicursorIndex);
 
-    vimState.historyTracker.addMark(startPos, '<');
-    vimState.historyTracker.addMark(endPos, '>');
+    vimState.historyTracker.addMark(start, '<');
+    vimState.historyTracker.addMark(end, '>');
 
     const numLinesYanked = toCopy.split('\n').length;
     ReportLinesYanked(numLinesYanked, vimState);
 
     await vimState.setCurrentMode(ModeName.Normal);
-    vimState.cursorStopPosition = startPos;
+    vimState.cursorStopPosition = start;
     return vimState;
   }
 }
